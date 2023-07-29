@@ -3,16 +3,25 @@ package com.cj.missyou.core;
 import com.cj.missyou.configuration.ExceptionCodeConfiguration;
 import com.cj.missyou.exception.http.HttpException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.support.DefaultMessageSourceResolvable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.ObjectError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import javax.servlet.http.HttpServletRequest;
+import javax.validation.ConstraintViolation;
+import javax.validation.ConstraintViolationException;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * @Date 2023/7/27 17:24
@@ -67,5 +76,32 @@ public class GlobalExceptionAdvice {
         // 直接提示错误信息
         System.out.println("e = " + e);
         return new UnifyResponse(9999,"服务器异常",method +"  "+ uri);
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST) // 400 参数错误
+    public UnifyResponse handleBeanValidation(HttpServletRequest request,MethodArgumentNotValidException e){
+        String uri = request.getRequestURI();
+        String method = request.getMethod();
+        // 多个校验器都没有通过，，返回集合
+        List<ObjectError> allErrors = e.getBindingResult().getAllErrors();
+
+        Optional<String> errorMsg = allErrors.stream().map(DefaultMessageSourceResolvable::getDefaultMessage).reduce((a, b) -> (a + "," + b ));
+        System.out.println("errormsg = " + errorMsg);
+
+
+        return new UnifyResponse(10001, errorMsg.orElse(""), method + "  " + uri);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public UnifyResponse handleConstraintViolationException(HttpServletRequest request,ConstraintViolationException e){
+        System.out.println("e = " + e);
+        // 所有的验证
+        Set<ConstraintViolation<?>> constraintViolations = e.getConstraintViolations();
+
+        // 在 异常的 message 中拼接好了，，如果是在自定义异常要定制化显示，，就需要遍历 ConstraintViolation自己拼接
+        return new UnifyResponse(10001, e.getMessage(), request.getMethod() + " " + request.getRequestURI());
+
     }
 }
